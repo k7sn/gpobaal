@@ -1,16 +1,3 @@
-# ==============================================================================
-# FILE: gpo_macro/config_manager.py
-# ==============================================================================
-
-"""
-================================================================================
-MODULO 1: GESTIONE CONFIGURAZIONI E PRESET JSON (config_manager.py)
-================================================================================
-Gestisce il salvataggio, caricamento e validazione dei parametri di combattimento,
-coordinate ROI dello schermo, profili colore HSV del Boss e coordinate della
-Skill Bar per la lettura visiva delle mosse disponibili.
-"""
-
 import json
 import os
 from typing import Dict, Any
@@ -22,6 +9,11 @@ class ConfigManager:
         self.default_config: Dict[str, Any] = {
             "profile_name": "True Demon Baal (Halloween Boss)",
             "target_boss": "True Demon Baal",
+            "player": {
+                "username": "IlTuoUsername",
+                "stop_at_damage_percent": 5.0,
+                "weapon_slot": "1"
+            },
             "hotkeys": {
                 "start_stop": "F9",
                 "emergency_kill": "F12",
@@ -30,6 +22,9 @@ class ConfigManager:
             "combat": {
                 "combat_radius_px": 420,
                 "safe_distance_px": 185,
+                "min_boss_area_close": 18000,
+                "max_boss_area_far": 3500,
+                "dash_cooldown_sec": 2.2,
                 "aim_offset_y": -22,
                 "skill_global_delay_ms": 340,
                 "camera_sensitivity": 0.7,
@@ -39,12 +34,20 @@ class ConfigManager:
                 "match_threshold": 0.8,
                 "capture_fps_limit": 30,
                 "enable_visual_skillbar_read": True,
-                "ready_brightness_threshold": 135,
+                "ready_brightness_threshold": 150,
+                "max_white_saturation": 65,
+                "tesseract_cmd": r"C:\Program Files\Tesseract-OCR\tesseract.exe",
                 "boss_bar_roi": {
-                    "top": 42,
-                    "left": 590,
-                    "width": 740,
-                    "height": 68
+                    "top": 35,
+                    "left": 450,
+                    "width": 1020,
+                    "height": 65
+                },
+                "damage_progress_roi": {
+                    "top": 95,
+                    "left": 450,
+                    "width": 380,
+                    "height": 160
                 },
                 "death_screen_roi": {
                     "top": 380,
@@ -54,15 +57,9 @@ class ConfigManager:
                 },
                 "target_roi": {
                     "top": 150,
-                    "left": 320,
-                    "width": 1280,
-                    "height": 740
-                },
-                "skill_bar_roi": {
-                    "top": 760,
-                    "left": 1620,
-                    "width": 270,
-                    "height": 290
+                    "left": 250,
+                    "width": 1420,
+                    "height": 760
                 },
                 "boss_hsv_primary": {
                     "label": "Corpo Zucca Arancione Baal (HSV)",
@@ -71,7 +68,7 @@ class ConfigManager:
                     "min_area": 450
                 },
                 "boss_hsv_secondary": {
-                    "label": "Occhi / Fiamma Verde-Ciano Neon Baal (HSV)",
+                    "label": "Occhi Verde-Ciano Neon Baal (HSV)",
                     "lower": [48, 170, 160],
                     "upper": [92, 255, 255],
                     "min_area": 90
@@ -86,44 +83,42 @@ class ConfigManager:
                 "reconnect_button_coords": [960, 740]
             },
             "skills": {
-            "e": {"name": "Raging Serpent (E)", "cooldown": 8.5, "delay_ms": 520, "min_range": 90, "max_range": 390, "enabled": True, "hud_coords": [1740, 795]},
-            "r": {"name": "Dragon Claw (R)", "cooldown": 11.5, "delay_ms": 650, "min_range": 75, "max_range": 340, "enabled": True, "hud_coords": [1740, 840]},
-            "z": {"name": "Light Ray / Hiken (Z)", "cooldown": 14.0, "delay_ms": 850, "min_range": 130, "max_range": 500, "enabled": True, "hud_coords": [1740, 885]},
-            "x": {"name": "Light Kick / Pillar (X)", "cooldown": 17.0, "delay_ms": 680, "min_range": 100, "max_range": 380, "enabled": True, "hud_coords": [1740, 930]},
-            "c": {"name": "Ultimate AoE (C)", "cooldown": 26.0, "delay_ms": 1150, "min_range": 140, "max_range": 520, "enabled": True, "hud_coords": [1740, 975]}
+                "c": {"name": "Skill C", "cooldown": 15.0, "delay_ms": 800, "enabled": True, "hud_coords": [1865, 635]},
+                "x": {"name": "Skill X", "cooldown": 15.0, "delay_ms": 680, "enabled": True, "hud_coords": [1865, 688]},
+                "z": {"name": "Skill Z", "cooldown": 12.0, "delay_ms": 750, "enabled": True, "hud_coords": [1865, 742]},
+                "t": {"name": "Flight / Mobility (T)", "cooldown": 10.0, "delay_ms": 500, "enabled": False, "hud_coords": [1865, 795]},
+                "r": {"name": "Skill R", "cooldown": 10.0, "delay_ms": 650, "enabled": True, "hud_coords": [1865, 848]},
+                "e": {"name": "Skill E", "cooldown": 8.0, "delay_ms": 520, "enabled": True, "hud_coords": [1865, 902]},
+                "f": {"name": "Block (F)", "cooldown": 3.0, "delay_ms": 300, "enabled": False, "hud_coords": [1865, 955]}
             },
             "death_waypoints": [
-            {"key": "w", "duration": 4.8, "label": "Sentiero Cimitero Thriller Bark"},
-            {"key": "d", "duration": 1.8, "label": "Ingresso Cratere Evocazione Baal"},
-            {"key": "space", "duration": 0.5, "label": "Geppo Sopra Fiamme Rosse Pavimento"},
-            {"key": "w", "duration": 3.0, "label": "Centro Arena True Demon Baal"}
+                {"key": "w", "duration": 4.8, "label": "Sentiero Cimitero Thriller Bark"},
+                {"key": "d", "duration": 1.8, "label": "Ingresso Cratere Evocazione Baal"},
+                {"key": "space", "duration": 0.5, "label": "Geppo Sopra Fiamme Rosse Pavimento"},
+                {"key": "w", "duration": 3.0, "label": "Centro Arena True Demon Baal"}
             ]
         }
 
     def load_config(self) -> Dict[str, Any]:
-        """Carica la configurazione dal file JSON o la crea se non esiste."""
         if not os.path.exists(self.filepath):
-            print(f"[CONFIG] File {self.filepath} non trovato. Creazione configurazione predefinita...")
             self.save_config(self.default_config)
             return self.default_config.copy()
-
         try:
             with open(self.filepath, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                print(f"[CONFIG] Profilo '{data.get('profile_name', 'Default')}' caricato correttamente.")
+                # Merge con chiavi nuove se mancanti nel vecchio config.json
+                for k, v in self.default_config.items():
+                    if k not in data:
+                        data[k] = v
                 return data
-        except Exception as exc:
-            print(f"[ERRORE CONFIG] File JSON corrotto ({exc}). Ripristino valori di default.")
+        except Exception:
             return self.default_config.copy()
 
     def save_config(self, config_data: Dict[str, Any], custom_path: str = None) -> bool:
-        """Salva il dizionario di configurazione su disco in modo atomico."""
         target = custom_path or self.filepath
         try:
             with open(target, "w", encoding="utf-8") as f:
                 json.dump(config_data, f, indent=4, ensure_ascii=False)
-            print(f"[CONFIG] Configurazione salvata in '{target}'.")
             return True
-        except Exception as exc:
-            print(f"[ERRORE SALVATAGGIO] Impossibile scrivere su {target}: {exc}")
+        except Exception:
             return False

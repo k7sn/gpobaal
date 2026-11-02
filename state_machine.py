@@ -1,18 +1,3 @@
-# ==============================================================================
-# FILE: gpo_macro/state_machine.py
-# ==============================================================================
-
-"""
-================================================================================
-MODULO 4: MACCHINA A STATI FINITI DEL GAME LOOP (state_machine.py)
-================================================================================
-Coordina i 4 stati richiesti:
-- STATO 1: IDLE_SEARCH (Ricerca Boss tramite barra HP e contorni HSV)
-- STATO 2: COMBAT (Lettura mosse pronte sullo schermo + Mira sul centroide + Invio Hotkey)
-- STATO 3: DEATH_RECOVERY (Rilevamento morte, attesa respawn e ritorno)
-- STATO 4: SERVER_HOP (Cambio server automatico su timeout spawn)
-"""
-
 import time
 import threading
 import pyautogui
@@ -61,10 +46,10 @@ class BossFarmStateMachine:
         self.input_ctrl.release_all_keys()
         self._emit_update("MACRO FERMATA", "In attesa di avvio dall'utente", 0.0, 0.0)
 
-    def _emit_update(self, state_label: str, action_detail: str, boss_hp: float, dist_px: float):
+    def _emit_update(self, state_label: str, action_detail: str, boss_hp: float, metric: float):
         if self.on_status_update:
             try:
-                self.on_status_update(state_label, action_detail, boss_hp, dist_px)
+                self.on_status_update(state_label, action_detail, boss_hp, metric)
             except Exception:
                 pass
 
@@ -100,7 +85,7 @@ class BossFarmStateMachine:
 
     def _handle_idle_state(self):
         boss_present, boss_hp = self.vision.detect_boss_presence_and_hp()
-        target_found, _, _ = self.vision.locate_boss_target_on_screen()
+        target_found, coords, offset_x, boss_area = self.vision.locate_boss_target_on_screen()
 
         if (boss_present and boss_hp > 0) or target_found:
             self.current_state = FarmState.COMBAT
@@ -123,33 +108,55 @@ class BossFarmStateMachine:
 
     def _handle_combat_state(self):
         boss_present, boss_hp = self.vision.detect_boss_presence_and_hp()
-        target_found, coords, distance_px = self.vision.locate_boss_target_on_screen()
+        target_found, coords, offset_x, boss_area = self.vision.locate_boss_target_on_screen()
 
         if not boss_present and not target_found:
             self.boss_kills_count += 1
+            self.input_ctrl.equipped_current_life = False
             self.idle_start_time = time.time()
             self.current_state = FarmState.IDLE_SEARCH
             return
 
+        # 1. Equipaggia lo slot Frutto/Arma selezionato nella GUI
+        self.input_ctrl.equip_selected_slot()
+
+        # 2. Controllo "Damage Progress" tramite OCR (Stop automatico al 5% o soglia scelta)
+        target_dmg = float(self.config.get("player", {}).get("stop_at_damage_percent", 5.0))
+        current_dmg = self.vision.get_player_damage_percentage()
+        if current_dmg >= target_dmg:
+            self.input_ctrl.release_all_keys()
+            self._emit_update(
+                "TARGET DANNO RAGGIUNTO",
+                f"Danno attuale: {current_dmg:.2f}% (Soglia: {target_dmg:.1f}%). In attesa sconfitta Boss...",
+                boss_hp,
+                boss_area
+            )
+            # Mettiamo in pausa gli attacchi ma non fermiamo la macro del tutto,
+            # così alla morte del boss ricomincia automaticamente l'IDLE_SEARCH.
+            return
+
         if target_found and coords is not None:
-            # 1. Legge dallo schermo quali mosse nella Skill Bar sono illuminate (pronte)
+            # 3. Legge quali mosse sono pronte (non rosse in cooldown)
             ready_hud_map = self.vision.scan_ready_skills_on_hud()
 
-            # 2. Regola la distanza di sicurezza da Baal
-            self.input_ctrl.adjust_spacing(distance_px)
+            # 4. Insegue il Boss (A/D laterale, W per avvicinarsi, Q per Dash)
+            self.input_ctrl.follow_boss_movement(coords, offset_x, boss_area)
 
-            # 3. Mira al centroide (coords) e preme l'hotkey della prima mossa disponibile
-            action_msg = self.input_ctrl.execute_available_skill(
-                distance_px, coords, ready_hud_map
+            # 5. Lancia la prima mossa disponibile
+            action_msg = self.input_ctrl.execute_available_skill(coords, ready_hud_map)
+            self._emit_update(
+                self.current_state.value,
+                f"{action_msg} | Tuo Danno: {current_dmg:.2f}%",
+                max(boss_hp, 10.0),
+                boss_area
             )
-            self._emit_update(self.current_state.value, action_msg, max(boss_hp, 15.0), distance_px)
         else:
             self.input_ctrl.rotate_camera_search()
             self._emit_update(
                 self.current_state.value,
                 "Boss attivo ma fuori visuale: rotazione telecamera verso il bersaglio...",
                 boss_hp,
-                999.0
+                0.0
             )
 
     def _handle_death_recovery_state(self):
@@ -170,4 +177,3 @@ class BossFarmStateMachine:
         self.input_ctrl.perform_roblox_server_hop()
         self.idle_start_time = time.time()
         self.current_state = FarmState.IDLE_SEARCH
-
