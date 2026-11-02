@@ -1,0 +1,54 @@
+# ==============================================================================
+# FILE: gpo_macro/.github/workflows/build-exe.yml
+# ==============================================================================
+
+# ==============================================================================
+# GITHUB ACTIONS WORKFLOW (.github/workflows/build-exe.yml)
+# Compila automaticamente il codice Python in un file Windows .exe sul cloud
+# di GitHub ad ogni push o quando crei una Release!
+# ==============================================================================
+name: Build Windows EXE (PyInstaller)
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build-windows-exe:
+    runs-on: windows-latest
+
+    steps:
+      - name: 1. Checkout codice del Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Configura Python 3.11 su Windows
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: 3. Installa librerie e PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: 4. Assicura esistenza cartella assets/templates
+        run: |
+          if (!(Test-Path -Path "assets/templates")) {
+            New-Item -ItemType Directory -Force -Path "assets/templates"
+          }
+
+      - name: 5. Compila GPO_Boss_Macro.exe con PyInstaller
+        run: |
+          pyinstaller --noconfirm --onefile --windowed --name "GPO_Boss_Macro" --add-data "assets;assets" --hidden-import "pynput.keyboard._win32" --hidden-import "pynput.mouse._win32" main.py
+
+      - name: 6. Carica l'eseguibile .EXE come Artifact scaricabile da GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: GPO_Boss_Macro_Windows_EXE
+          path: |
+            dist/GPO_Boss_Macro.exe
+            config.json
+

@@ -1,0 +1,17 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyInstaller / Build
+build/
+dist/
+*.spec
+
+# Ambienti virtuali
+venv/
+.venv/
+env/
+
+# Config locali (verranno generate al primo avvio)
+config.json
